@@ -29,7 +29,7 @@
       flex: 1;
       padding: 10px;
       overflow-y: auto;
-      display: none;
+      display: flex;
       flex-direction: column;
       gap: 10px;
     }
@@ -53,7 +53,7 @@
       padding: 10px;
       background: #fff;
       border-top: 1px solid #ccc;
-      display: none;
+      display: flex;
       flex-direction: column;
       gap: 5px;
     }
@@ -93,29 +93,6 @@
       background-color: #eee;
       color: #555;
     }
-    #auth-container {
-      margin: auto;
-      padding: 20px;
-      background: #fff;
-      border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    #auth-container input {
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-    }
-    #auth-container button {
-      padding: 10px;
-      background-color: #444;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-    }
   </style>
 </head>
 <body>
@@ -125,14 +102,9 @@
       <button onclick="logout()">Logout</button>
       <button onclick="clearChat()">Clear</button>
     </div>
-  </header>  <div id="auth-container">
-    <h2>Login</h2>
-    <input type="email" id="email" placeholder="Email">
-    <input type="password" id="password" placeholder="Password">
-    <button onclick="login()">Login</button>
-    <button onclick="register()">Register</button>
-    <p id="auth-error" style="color:red;"></p>
-  </div>  <div class="chat-container" id="chat-container"></div>  <div class="input-area" id="input-area">
+  </header>  <div class="chat-container" id="chat-container">
+    <!-- Pesan akan muncul di sini -->
+  </div>  <div class="input-area">
     <div class="toolbar">
       <button title="Voice Note">🎤</button>
       <button title="Image">📷</button>
@@ -142,51 +114,32 @@
       <input type="text" id="message" placeholder="Tulis pesan...">
       <button onclick="sendMessage()">SEND</button>
     </div>
+    <div style="margin-top: 10px;">
+      <input type="email" id="email" placeholder="Email" style="width: 49%; padding: 5px;">
+      <input type="password" id="password" placeholder="Password" style="width: 49%; padding: 5px;">
+      <button onclick="login()">Login</button>
+      <button onclick="register()">Register</button>
+    </div>
   </div>  <footer>
     Sehat Terus Ya Sayang - I Love You
   </footer>  <script>
     const SUPABASE_URL = 'https://mjotbyzfgkteijztbmpm.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qb3RieXpmZ2t0ZWlqenRibXBtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI4MjQwNjEsImV4cCI6MjA2ODQwMDA2MX0.ciy7iSGtSH1nevn1MafpMFyprnie7_XBHiDqzxO7FLc';
     const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
     const room_id = 'test123';
     let user = null;
 
-    async function login() {
-      const email = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value.trim();
-      const errorEl = document.getElementById('auth-error');
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        errorEl.textContent = error.message;
-      } else {
-        errorEl.textContent = '';
-        init();
-      }
-    }
-
-    async function register() {
-      const email = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value.trim();
-      const errorEl = document.getElementById('auth-error');
-      const { data, error } = await supabase.auth.signUp({ email, password });
-      if (error) {
-        errorEl.textContent = error.message;
-      } else {
-        errorEl.style.color = 'green';
-        errorEl.textContent = 'Registrasi berhasil, silakan login.';
-      }
-    }
-
     async function init() {
       const { data, error } = await supabase.auth.getUser();
-      if (error || !data.user) return;
+      if (error || !data.user) {
+        console.log('Belum login');
+        return;
+      }
       user = data.user;
-      document.getElementById('auth-container').style.display = 'none';
-      document.getElementById('chat-container').style.display = 'flex';
-      document.getElementById('input-area').style.display = 'flex';
-      await logLoginTime();
       loadMessages();
       listenMessages();
+      await logLoginTime();
     }
 
     async function logLoginTime() {
@@ -198,6 +151,7 @@
       const input = document.getElementById('message');
       const content = input.value.trim();
       if (!content) return;
+
       await supabase.from('messages').insert({
         sender_id: user.id,
         room_id,
@@ -235,6 +189,43 @@
         .subscribe();
     }
 
+    async function login() {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value.trim();
+
+      if (!email || !password) {
+        alert('Email dan password harus diisi.');
+        return;
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+      if (error) {
+        alert('Login gagal: ' + error.message);
+        return;
+      }
+
+      location.reload();
+    }
+
+    async function register() {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value.trim();
+
+      if (!email || !password) {
+        alert('Isi email dan password!');
+        return;
+      }
+
+      const { data, error } = await supabase.auth.signUp({ email, password });
+
+      if (error) {
+        alert('Gagal register: ' + error.message);
+      } else {
+        alert('Registrasi berhasil! Silakan login.');
+      }
+    }
+
     async function logout() {
       await supabase.auth.signOut();
       location.reload();
@@ -247,9 +238,6 @@
       document.getElementById('chat-container').innerHTML = '';
     }
 
-    // Otomatis coba login saat page load
-    supabase.auth.getUser().then(({ data }) => {
-      if (data?.user) init();
-    });
+    init();
   </script></body>
 </html>

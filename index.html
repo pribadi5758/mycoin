@@ -3,241 +3,150 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sayang.. 😘</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+    const SUPABASE_URL = 'https://mjotbyzfgkteijztbmpm.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qb3RieXpmZ2t0ZWlqenRibXBtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI4MjQwNjEsImV4cCI6MjA2ODQwMDA2MX0.ciy7iSGtSH1nevn1MafpMFyprnie7_XBHiDqzxO7FLc';
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const authSection = document.getElementById('auth-section');
+const chatSection = document.getElementById('chat-section');
+const loginForm = document.getElementById('login-form');
+const registerForm = document.getElementById('register-form');
+
+const room_id = 'test123';
+let user = null;
+
+window.addEventListener('DOMContentLoaded', async () => {
+  const { data, error } = await supabase.auth.getUser();
+  if (data.user) {
+    user = data.user;
+    showChat();
+  } else {
+    authSection.style.display = 'block';
+  }
+});
+
+loginForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = loginForm.email.value;
+  const password = loginForm.password.value;
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) return alert('Login gagal: ' + error.message);
+  location.reload();
+});
+
+registerForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = registerForm.email.value;
+  const password = registerForm.password.value;
+  const { error } = await supabase.auth.signUp({ email, password });
+  if (error) return alert('Gagal daftar: ' + error.message);
+  alert('Registrasi berhasil, silakan login.');
+});
+
+function showChat() {
+  authSection.style.display = 'none';
+  chatSection.style.display = 'flex';
+  loadMessages();
+  listenMessages();
+  logLoginTime();
+}
+
+async function logLoginTime() {
+  const time = new Date().toISOString();
+  await supabase.from('users').upsert({ id: user.id, login_time: time });
+}
+
+async function sendMessage() {
+  const input = document.getElementById('message');
+  const content = input.value.trim();
+  if (!content) return;
+  await supabase.from('messages').insert({ sender_id: user.id, room_id, content, type: 'text' });
+  input.value = '';
+}
+
+async function loadMessages() {
+  const { data: messages } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('room_id', room_id)
+    .order('timestamp', { ascending: true });
+  messages.forEach(showMessage);
+}
+
+function showMessage(msg) {
+  const container = document.getElementById('chat-container');
+  const el = document.createElement('div');
+  const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  el.className = 'message' + (msg.sender_id === user.id ? ' self' : '');
+  el.innerHTML = `<div class="timestamp">${time}</div><strong>${msg.sender_id === user.id ? 'Kamu' : 'Teman'}:</strong> ${msg.content}`;
+  container.appendChild(el);
+  container.scrollTop = container.scrollHeight;
+}
+
+function listenMessages() {
+  supabase
+    .channel('public:messages')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
+      showMessage(payload.new);
+    })
+    .subscribe();
+}
+
+window.logout = async function () {
+  await supabase.auth.signOut();
+  location.reload();
+}
+
+window.clearChat = async function () {
+  if (!confirm('Hapus semua pesan?')) return;
+  await supabase.from('messages').delete().eq('room_id', room_id);
+  document.getElementById('chat-container').innerHTML = '';
+}
+
+window.sendMessage = sendMessage;
+
+  </script>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #f4f4f4;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-    }
-    header {
-      background-color: #444;
-      color: white;
-      padding: 10px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .chat-container {
-      flex: 1;
-      padding: 10px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .message {
-      background-color: #fff;
-      padding: 8px 10px;
-      border-radius: 8px;
-      max-width: 80%;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-    }
-    .message.self {
-      align-self: flex-end;
-      background-color: #dcf8c6;
-    }
-    .timestamp {
-      font-size: 0.75rem;
-      color: #777;
-      margin-bottom: 2px;
-    }
-    .input-area {
-      padding: 10px;
-      background: #fff;
-      border-top: 1px solid #ccc;
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-    }
-    .toolbar {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 5px;
-    }
-    .toolbar button {
-      background: none;
-      border: none;
-      font-size: 1.2rem;
-      cursor: pointer;
-    }
-    .message-input {
-      display: flex;
-      gap: 5px;
-    }
-    .message-input input[type="text"] {
-      flex: 1;
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-    }
-    .message-input button {
-      padding: 10px 15px;
-      background-color: #444;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-    }
-    footer {
-      text-align: center;
-      font-size: 0.75rem;
-      padding: 5px;
-      background-color: #eee;
-      color: #555;
-    }
+    body { margin: 0; font-family: sans-serif; background: #f4f4f4; }
+    header, footer { background: #444; color: white; padding: 10px; text-align: center; }
+    .container { display: flex; flex-direction: column; height: 100vh; }
+    .chat-container { flex: 1; padding: 10px; overflow-y: auto; }
+    .message { background: #fff; padding: 8px 10px; margin: 5px; border-radius: 8px; max-width: 80%; }
+    .message.self { align-self: flex-end; background: #dcf8c6; }
+    .timestamp { font-size: 0.75rem; color: #777; }
+    .input-area { display: flex; flex-direction: column; padding: 10px; background: #fff; }
+    .input-area input { flex: 1; padding: 10px; margin-right: 10px; border: 1px solid #ccc; border-radius: 5px; }
+    .input-area button { padding: 10px; border: none; background: #444; color: white; border-radius: 5px; }
+    form { display: flex; flex-direction: column; gap: 10px; margin: 20px auto; width: 300px; }
   </style>
 </head>
 <body>
+<div id="auth-section" style="display:none">
+  <h2 style="text-align:center">Login</h2>
+  <form id="login-form">
+    <input name="email" type="email" placeholder="Email" required>
+    <input name="password" type="password" placeholder="Password" required>
+    <button type="submit">Login</button>
+  </form>
+  <h2 style="text-align:center">atau Register</h2>
+  <form id="register-form">
+    <input name="email" type="email" placeholder="Email" required>
+    <input name="password" type="password" placeholder="Password" required>
+    <button type="submit">Register</button>
+  </form>
+</div><div id="chat-section" class="container" style="display:none">
   <header>
-    <div>🥰😘♥️</div>
-    <div>
-      <button onclick="logout()">Logout</button>
-      <button onclick="clearChat()">Clear</button>
-    </div>
-  </header>  <div class="chat-container" id="chat-container">
-    <!-- Pesan akan muncul di sini -->
-  </div>  <div class="input-area">
-    <div class="toolbar">
-      <button title="Voice Note">🎤</button>
-      <button title="Image">📷</button>
-      <button title="Emoticon">😊</button>
-    </div>
-    <div class="message-input">
-      <input type="text" id="message" placeholder="Tulis pesan...">
-      <button onclick="sendMessage()">SEND</button>
-    </div>
-    <div style="margin-top: 10px;">
-      <input type="email" id="email" placeholder="Email" style="width: 49%; padding: 5px;">
-      <input type="password" id="password" placeholder="Password" style="width: 49%; padding: 5px;">
-      <button onclick="login()">Login</button>
-      <button onclick="register()">Register</button>
-    </div>
-  </div>  <footer>
-    Sehat Terus Ya Sayang - I Love You
-  </footer>  <script>
-    const SUPABASE_URL = 'https://mjotbyzfgkteijztbmpm.supabase.co';
-    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qb3RieXpmZ2t0ZWlqenRibXBtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI4MjQwNjEsImV4cCI6MjA2ODQwMDA2MX0.ciy7iSGtSH1nevn1MafpMFyprnie7_XBHiDqzxO7FLc';
-    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-    const room_id = 'test123';
-    let user = null;
-
-    async function init() {
-      const { data, error } = await supabase.auth.getUser();
-      if (error || !data.user) {
-        console.log('Belum login');
-        return;
-      }
-      user = data.user;
-      loadMessages();
-      listenMessages();
-      await logLoginTime();
-    }
-
-    async function logLoginTime() {
-      const time = new Date().toISOString();
-      await supabase.from('users').upsert({ id: user.id, login_time: time });
-    }
-
-    async function sendMessage() {
-      const input = document.getElementById('message');
-      const content = input.value.trim();
-      if (!content) return;
-
-      await supabase.from('messages').insert({
-        sender_id: user.id,
-        room_id,
-        content,
-        type: 'text'
-      });
-      input.value = '';
-    }
-
-    async function loadMessages() {
-      const { data: messages } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('room_id', room_id)
-        .order('timestamp', { ascending: true });
-      messages.forEach(showMessage);
-    }
-
-    function showMessage(msg) {
-      const container = document.getElementById('chat-container');
-      const el = document.createElement('div');
-      const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      el.className = 'message' + (msg.sender_id === user.id ? ' self' : '');
-      el.innerHTML = `<div class="timestamp">${time}</div><strong>${msg.sender_id === user.id ? 'Kamu' : 'Teman'}:</strong> ${msg.content}`;
-      container.appendChild(el);
-      container.scrollTop = container.scrollHeight;
-    }
-
-    function listenMessages() {
-      supabase
-        .channel('public:messages')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
-          showMessage(payload.new);
-        })
-        .subscribe();
-    }
-
-    async function login() {
-      const email = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value.trim();
-
-      if (!email || !password) {
-        alert('Email dan password harus diisi.');
-        return;
-      }
-
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-
-      if (error) {
-        alert('Login gagal: ' + error.message);
-        return;
-      }
-
-      location.reload();
-    }
-
-    async function register() {
-      const email = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value.trim();
-
-      if (!email || !password) {
-        alert('Isi email dan password!');
-        return;
-      }
-
-      const { data, error } = await supabase.auth.signUp({ email, password });
-
-      if (error) {
-        alert('Gagal register: ' + error.message);
-      } else {
-        alert('Registrasi berhasil! Silakan login.');
-      }
-    }
-
-    async function logout() {
-      await supabase.auth.signOut();
-      location.reload();
-    }
-
-    async function clearChat() {
-      const confirmClear = confirm('Hapus semua pesan?');
-      if (!confirmClear) return;
-      await supabase.from('messages').delete().eq('room_id', room_id);
-      document.getElementById('chat-container').innerHTML = '';
-    }
-
-    init();
-  </script></body>
+    <span>🥰😘♥️</span>
+    <span><button onclick="logout()">Logout</button> <button onclick="clearChat()">Clear</button></span>
+  </header>
+  <div class="chat-container" id="chat-container"></div>
+  <div class="input-area">
+    <input id="message" type="text" placeholder="Tulis pesan...">
+    <button onclick="sendMessage()">Kirim</button>
+  </div>
+  <footer>Sehat Terus Ya Sayang - I Love You</footer>
+</div>
+</body>
 </html>
